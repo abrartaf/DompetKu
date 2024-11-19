@@ -3,12 +3,12 @@ import '../models/transaction.dart';
 
 class TransactionForm extends StatefulWidget {
   final Function(String, double, bool) addTransaction;
-  final Transaction? editTransaction;
+  final Transaction? transactionToEdit; // Optional transaction to edit
   final Function(String, String, double, bool)? onEditTransaction;
 
   TransactionForm(
     this.addTransaction, {
-    this.editTransaction,
+    this.transactionToEdit,
     this.onEditTransaction,
   });
 
@@ -24,10 +24,11 @@ class _TransactionFormState extends State<TransactionForm> {
   @override
   void initState() {
     super.initState();
-    if (widget.editTransaction != null) {
-      _titleController.text = widget.editTransaction!.title;
-      _amountController.text = widget.editTransaction!.amount.toString();
-      _isIncome = widget.editTransaction!.isIncome;
+
+    if (widget.transactionToEdit != null) {
+      _titleController.text = widget.transactionToEdit!.title;
+      _amountController.text = widget.transactionToEdit!.amount.toString();
+      _isIncome = widget.transactionToEdit!.isIncome;
     }
   }
 
@@ -39,9 +40,9 @@ class _TransactionFormState extends State<TransactionForm> {
       return;
     }
 
-    if (widget.editTransaction != null) {
+    if (widget.transactionToEdit != null) {
       widget.onEditTransaction!(
-        widget.editTransaction!.id,
+        widget.transactionToEdit!.id,
         enteredTitle,
         enteredAmount,
         _isIncome,
@@ -50,15 +51,15 @@ class _TransactionFormState extends State<TransactionForm> {
       widget.addTransaction(enteredTitle, enteredAmount, _isIncome);
     }
 
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(); // Close the modal
   }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 5,
-      child: Container(
-        padding: EdgeInsets.all(10),
+      child: Padding(
+        padding: const EdgeInsets.all(10.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -71,39 +72,38 @@ class _TransactionFormState extends State<TransactionForm> {
               decoration: InputDecoration(labelText: 'Amount'),
               keyboardType: TextInputType.number,
             ),
-            SizedBox(height: 20),
-            // Toggle buttons for Income and Expense
+            SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isIncome ? Colors.green : Colors.grey, // Corrected styling
-                  ),
-                  onPressed: () {
+                Text('Transaction Type:'),
+                ToggleButtons(
+                  isSelected: [_isIncome, !_isIncome],
+                  onPressed: (index) {
                     setState(() {
-                      _isIncome = true;
+                      _isIncome = index == 0; // Index 0 -> Income, Index 1 -> Expense
                     });
                   },
-                  child: Text('Income'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: !_isIncome ? Colors.red : Colors.grey, // Corrected styling
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _isIncome = false;
-                    });
-                  },
-                  child: Text('Expense'),
+                  borderRadius: BorderRadius.circular(10),
+                  selectedColor: Colors.white,
+                  fillColor: Colors.blue,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text('Income'),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text('Expense'),
+                    ),
+                  ],
                 ),
               ],
             ),
-            SizedBox(height: 20),
+            SizedBox(height: 10),
             ElevatedButton(
               onPressed: _submitData,
-              child: Text(widget.editTransaction != null
+              child: Text(widget.transactionToEdit != null
                   ? 'Edit Transaction'
                   : 'Add Transaction'),
             ),

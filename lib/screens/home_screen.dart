@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../widgets/transaction_form.dart';
 import '../widgets/transaction_list.dart';
 
 class HomeScreen extends StatefulWidget {
+  final Function(double, double) updateChartData;
+
+  HomeScreen({required this.updateChartData});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
   final List<Transaction> _transactions = [];
+  String _filter = "All"; // Filter state: "All", "Income", or "Expenses"
 
+  double _totalIncome = 0.0;
+  double _totalExpenses = 0.0;
+
+  // Add a new transaction
   void _addTransaction(String title, double amount, bool isIncome) {
     final newTx = Transaction(
       id: DateTime.now().toString(),
@@ -23,16 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _transactions.add(newTx);
+      _updateChartData();
     });
   }
 
-  void _deleteTransaction(String id) {
-    setState(() {
-      _transactions.removeWhere((tx) => tx.id == id);
-    });
-  }
-
-  void _editTransaction(String id, String newTitle, double newAmount, bool newIsIncome) {
+  // Edit an existing transaction
+  void _editTransaction(String id, String newTitle, double newAmount, bool isIncome) {
     final index = _transactions.indexWhere((tx) => tx.id == id);
     if (index != -1) {
       setState(() {
@@ -41,67 +45,127 @@ class _HomeScreenState extends State<HomeScreen> {
           title: newTitle,
           amount: newAmount,
           date: DateTime.now(),
-          isIncome: newIsIncome,
+          isIncome: isIncome,
         );
+        _updateChartData();
       });
     }
   }
 
+  // Delete a transaction
+  void _deleteTransaction(String id) {
+    setState(() {
+      _transactions.removeWhere((tx) => tx.id == id);
+      _updateChartData();
+    });
+  }
+
+  // Update chart data (income and expenses)
+  void _updateChartData() {
+    _totalIncome = _transactions
+        .where((tx) => tx.isIncome)
+        .fold(0.0, (sum, tx) => sum + tx.amount);
+
+    _totalExpenses = _transactions
+        .where((tx) => !tx.isIncome)
+        .fold(0.0, (sum, tx) => sum + tx.amount);
+
+    widget.updateChartData(_totalIncome, _totalExpenses);
+  }
+
+  // Open the TransactionForm for adding or editing
   void _openTransactionForm(BuildContext context, {Transaction? transactionToEdit}) {
     showModalBottomSheet(
       context: context,
       builder: (_) {
         return TransactionForm(
           _addTransaction,
-          editTransaction: transactionToEdit,
+          transactionToEdit: transactionToEdit,
           onEditTransaction: _editTransaction,
         );
       },
     );
   }
 
-  double get _totalIncome {
-    return _transactions
-        .where((tx) => tx.isIncome)
-        .fold(0.0, (sum, item) => sum + item.amount);
-  }
-
-  double get _totalExpenses {
-    return _transactions
-        .where((tx) => !tx.isIncome)
-        .fold(0.0, (sum, item) => sum + item.amount);
-  }
-
-  double get _totalBalance {
-    return _totalIncome - _totalExpenses;
+  // Filtered transactions based on the selected filter
+  List<Transaction> get _filteredTransactions {
+    if (_filter == "All") {
+      return _transactions;
+    } else if (_filter == "Income") {
+      return _transactions.where((tx) => tx.isIncome).toList();
+    } else {
+      return _transactions.where((tx) => !tx.isIncome).toList();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Money Manager'),
+        backgroundColor: Colors.blue,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            DropdownButton<String>(
+              value: _filter,
+              icon: Icon(Icons.filter_list, color: Colors.white),
+              dropdownColor: Colors.blue,
+              underline: SizedBox(), // Removes underline
+              items: [
+                DropdownMenuItem(
+                  value: "All",
+                  child: Text("All", style: TextStyle(color: Colors.white)),
+                ),
+                DropdownMenuItem(
+                  value: "Income",
+                  child: Text("Income", style: TextStyle(color: Colors.white)),
+                ),
+                DropdownMenuItem(
+                  value: "Expenses",
+                  child: Text("Expenses", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _filter = value!;
+                });
+              },
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
+          // Summary Bar
           Card(
-            elevation: 5,
             margin: EdgeInsets.all(10),
+            elevation: 3,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Padding(
-              padding: EdgeInsets.all(10),
+              padding: const EdgeInsets.all(15.0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildSummaryItem('Income', _totalIncome, Colors.green),
-                  _buildSummaryItem('Expenses', _totalExpenses, Colors.red),
-                  _buildSummaryItem('Balance', _totalBalance, Colors.blue),
+                  _buildSummaryItem("Income", _totalIncome, Colors.green),
+                  _buildSummaryItem("Expenses", _totalExpenses, Colors.red),
+                  _buildSummaryItem(
+                    "Balance",
+                    _totalIncome - _totalExpenses,
+                    (_totalIncome - _totalExpenses) >= 0
+                        ? Colors.blue
+                        : Colors.red,
+                  ),
                 ],
               ),
             ),
           ),
+
+          // Transaction List
           Expanded(
             child: TransactionList(
-              transactions: _transactions,
+              transactions: _filteredTransactions,
               deleteTransaction: _deleteTransaction,
               editTransaction: (tx) =>
                   _openTransactionForm(context, transactionToEdit: tx),
@@ -113,7 +177,6 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () => _openTransactionForm(context),
         child: Icon(Icons.add),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -122,12 +185,16 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           title,
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         SizedBox(height: 5),
         Text(
           amount.toStringAsFixed(0),
-          style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
         ),
       ],
     );

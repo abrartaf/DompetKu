@@ -30,17 +30,23 @@ class TransactionList extends StatelessWidget {
                 margin: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                 child: ListTile(
                   leading: CircleAvatar(
+                    backgroundColor:
+                        tx.isIncome ? Colors.green : Colors.red, // Color based on type
                     radius: 30,
                     child: FittedBox(
-                      child: Text(
-                        tx.amount.toStringAsFixed(2),
-                        style: TextStyle(
-                          color: tx.isIncome ? Colors.green : Colors.red,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          '\Rp${tx.amount.toStringAsFixed(2)}',
+                          style: TextStyle(color: Colors.white),
                         ),
                       ),
                     ),
                   ),
-                  title: Text(tx.title),
+                  title: Text(
+                    tx.title,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(DateFormat.yMMMd().format(tx.date)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
