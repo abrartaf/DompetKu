@@ -31,13 +31,13 @@ class TransactionList extends StatelessWidget {
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor:
-                        tx.isIncome ? Colors.green : Colors.red, // Color based on type
+                        tx.isIncome ? Colors.green : Colors.red, // Set color based on type
                     radius: 30,
                     child: FittedBox(
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Text(
-                          '\Rp${tx.amount.toStringAsFixed(2)}',
+                          'Rp${tx.amount.toStringAsFixed(2)}',
                           style: TextStyle(color: Colors.white),
                         ),
                       ),
@@ -57,7 +57,9 @@ class TransactionList extends StatelessWidget {
                       ),
                       IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => deleteTransaction(tx.id),
+                        onPressed: () {
+                          _showDeleteConfirmation(context, tx.id);
+                        },
                       ),
                     ],
                   ),
@@ -65,5 +67,29 @@ class TransactionList extends StatelessWidget {
               );
             },
           );
+  }
+
+  // Show confirmation dialog before deleting a transaction
+  void _showDeleteConfirmation(BuildContext context, String transactionId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete Transaction'),
+        content: Text('Are you sure you want to delete this transaction?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              deleteTransaction(transactionId);
+              Navigator.of(ctx).pop();
+            },
+            child: Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 }

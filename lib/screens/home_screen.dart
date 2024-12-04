@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/transaction.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/transaction.dart' as model; // Prefix the custom model
 import '../widgets/transaction_form.dart';
 import '../widgets/transaction_list.dart';
 
@@ -13,89 +14,96 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<Transaction> _transactions = [];
   String _filter = "All"; // Filter state: "All", "Income", or "Expenses"
 
-  double _totalIncome = 0.0;
-  double _totalExpenses = 0.0;
+  // Update chart data (income and expenses)
+  void _updateChartData() async {
+    final querySnapshot = await FirebaseFirestore.instance.collection('transactions').get();
 
-  // Add a new transaction
-  void _addTransaction(String title, double amount, bool isIncome) {
-    final newTx = Transaction(
-      id: DateTime.now().toString(),
-      title: title,
-      amount: amount,
-      date: DateTime.now(),
-      isIncome: isIncome,
-    );
+    double totalIncome = 0.0;
+    double totalExpenses = 0.0;
 
-    setState(() {
-      _transactions.add(newTx);
-      _updateChartData();
-    });
+    for (var doc in querySnapshot.docs) {
+      final data = doc.data();
+      final isIncome = data['isIncome'] as bool;
+      final amount = (data['amount'] as num).toDouble();
+
+      if (isIncome) {
+        totalIncome += amount;
+      } else {
+        totalExpenses += amount;
+      }
+    }
+
+    widget.updateChartData(totalIncome, totalExpenses);
   }
 
-  // Edit an existing transaction
+  // Add a new transaction to Firestore
+  void _addTransaction(String title, double amount, bool isIncome) {
+    FirebaseFirestore.instance.collection('transactions').add({
+      'title': title,
+      'amount': amount,
+      'isIncome': isIncome,
+      'date': DateTime.now(),
+    });
+    _updateChartData();
+  }
+
+  // Edit an existing transaction in Firestore
   void _editTransaction(String id, String newTitle, double newAmount, bool isIncome) {
-    final index = _transactions.indexWhere((tx) => tx.id == id);
-    if (index != -1) {
-      setState(() {
-        _transactions[index] = Transaction(
-          id: id,
-          title: newTitle,
-          amount: newAmount,
-          date: DateTime.now(),
-          isIncome: isIncome,
-        );
-        _updateChartData();
-      });
+    FirebaseFirestore.instance.collection('transactions').doc(id).update({
+      'title': newTitle,
+      'amount': newAmount,
+      'isIncome': isIncome,
+      'date': DateTime.now(),
+    });
+    _updateChartData();
+  }
+
+  // Delete a transaction from Firestore
+  void _deleteTransaction(String id) {
+    FirebaseFirestore.instance.collection('transactions').doc(id).delete();
+    _updateChartData();
+  }
+
+  // Filtered transactions stream based on the selected filter
+  Stream<List<model.Transaction>> get _filteredTransactionsStream {
+    final collection = FirebaseFirestore.instance.collection('transactions');
+
+    if (_filter == "Income") {
+      return collection.where('isIncome', isEqualTo: true).snapshots().map(_mapToTransactionList);
+    } else if (_filter == "Expenses") {
+      return collection.where('isIncome', isEqualTo: false).snapshots().map(_mapToTransactionList);
+    } else {
+      return collection.snapshots().map(_mapToTransactionList);
     }
   }
 
-  // Delete a transaction
-  void _deleteTransaction(String id) {
-    setState(() {
-      _transactions.removeWhere((tx) => tx.id == id);
-      _updateChartData();
-    });
-  }
-
-  // Update chart data (income and expenses)
-  void _updateChartData() {
-    _totalIncome = _transactions
-        .where((tx) => tx.isIncome)
-        .fold(0.0, (sum, tx) => sum + tx.amount);
-
-    _totalExpenses = _transactions
-        .where((tx) => !tx.isIncome)
-        .fold(0.0, (sum, tx) => sum + tx.amount);
-
-    widget.updateChartData(_totalIncome, _totalExpenses);
+  // Convert Firestore data to a list of Transaction objects
+  List<model.Transaction> _mapToTransactionList(QuerySnapshot snapshot) {
+    return snapshot.docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return model.Transaction(
+        id: doc.id,
+        title: data['title'],
+        amount: (data['amount'] as num).toDouble(),
+        isIncome: data['isIncome'] as bool,
+        date: (data['date'] as Timestamp).toDate(),
+      );
+    }).toList();
   }
 
   // Open the TransactionForm for adding or editing
-  void _openTransactionForm(BuildContext context, {Transaction? transactionToEdit}) {
+  void _openTransactionForm(BuildContext context, {model.Transaction? transactionToEdit}) {
     showModalBottomSheet(
       context: context,
       builder: (_) {
         return TransactionForm(
-          _addTransaction,
           transactionToEdit: transactionToEdit,
-          onEditTransaction: _editTransaction,
+          onTransactionUpdated: _updateChartData,
         );
       },
     );
-  }
-
-  // Filtered transactions based on the selected filter
-  List<Transaction> get _filteredTransactions {
-    if (_filter == "All") {
-      return _transactions;
-    } else if (_filter == "Income") {
-      return _transactions.where((tx) => tx.isIncome).toList();
-    } else {
-      return _transactions.where((tx) => !tx.isIncome).toList();
-    }
   }
 
   @override
@@ -110,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
               value: _filter,
               icon: Icon(Icons.filter_list, color: Colors.white),
               dropdownColor: Colors.blue,
-              underline: SizedBox(), // Removes underline
+              underline: SizedBox(),
               items: [
                 DropdownMenuItem(
                   value: "All",
@@ -136,39 +144,64 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          // Summary Bar
-          Card(
-            margin: EdgeInsets.all(10),
-            elevation: 3,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(15.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildSummaryItem("Income", _totalIncome, Colors.green),
-                  _buildSummaryItem("Expenses", _totalExpenses, Colors.red),
-                  _buildSummaryItem(
-                    "Balance",
-                    _totalIncome - _totalExpenses,
-                    (_totalIncome - _totalExpenses) >= 0
-                        ? Colors.blue
-                        : Colors.red,
-                  ),
-                ],
-              ),
-            ),
-          ),
+          StreamBuilder<List<model.Transaction>>(
+            stream: _filteredTransactionsStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator());
+              }
 
-          // Transaction List
+              final transactions = snapshot.data ?? [];
+              final totalIncome = transactions
+                  .where((tx) => tx.isIncome)
+                  .fold(0.0, (sum, tx) => sum + tx.amount);
+
+              final totalExpenses = transactions
+                  .where((tx) => !tx.isIncome)
+                  .fold(0.0, (sum, tx) => sum + tx.amount);
+
+              return Card(
+                margin: EdgeInsets.all(10),
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(15.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildSummaryItem("Income", totalIncome, Colors.green),
+                      _buildSummaryItem("Expenses", totalExpenses, Colors.red),
+                      _buildSummaryItem(
+                        "Balance",
+                        totalIncome - totalExpenses,
+                        (totalIncome - totalExpenses) >= 0
+                            ? Colors.blue
+                            : Colors.red,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
           Expanded(
-            child: TransactionList(
-              transactions: _filteredTransactions,
-              deleteTransaction: _deleteTransaction,
-              editTransaction: (tx) =>
-                  _openTransactionForm(context, transactionToEdit: tx),
+            child: StreamBuilder<List<model.Transaction>>(
+              stream: _filteredTransactionsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                final transactions = snapshot.data ?? [];
+                return TransactionList(
+                  transactions: transactions,
+                  deleteTransaction: _deleteTransaction,
+                  editTransaction: (tx) =>
+                      _openTransactionForm(context, transactionToEdit: tx),
+                );
+              },
             ),
           ),
         ],

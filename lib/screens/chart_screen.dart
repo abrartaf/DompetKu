@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChartScreen extends StatefulWidget {
-  final double income;
-  final double expense;
-
-  // Constructor to accept income and expense
-  ChartScreen({required this.income, required this.expense});
-
   @override
   _ChartScreenState createState() => _ChartScreenState();
 }
@@ -17,22 +12,50 @@ class _ChartScreenState extends State<ChartScreen> {
   DateTime _startDate = DateTime(2024, 11, 1);
   DateTime _endDate = DateTime(2024, 11, 30);
 
-  // Handle period change and update date range
+  // Fetch income and expense data from Firestore
+  Stream<Map<String, double>> _fetchChartData() {
+    return FirebaseFirestore.instance.collection('transactions').snapshots().map((snapshot) {
+      double totalIncome = 0.0;
+      double totalExpense = 0.0;
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final isIncome = data['isIncome'] as bool;
+        final amount = (data['amount'] as num).toDouble();
+        final date = (data['date'] as Timestamp).toDate();
+
+        // Filter by date range
+        if (date.isAfter(_startDate.subtract(Duration(days: 1))) &&
+            date.isBefore(_endDate.add(Duration(days: 1)))) {
+          if (isIncome) {
+            totalIncome += amount;
+          } else {
+            totalExpense += amount;
+          }
+        }
+      }
+
+      return {'income': totalIncome, 'expense': totalExpense};
+    });
+  }
+
+  // Update date range based on selected period
   void _changePeriod(String period) {
     setState(() {
       _selectedPeriod = period;
 
       if (period == "Monthly") {
-        _startDate = DateTime(2024, 11, 1);
-        _endDate = DateTime(2024, 11, 30);
-      } 
+        _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
+        _endDate = DateTime(DateTime.now().year, DateTime.now().month + 1, 0);
+      } else if (period == "Weekly") {
+        _startDate = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
+        _endDate = _startDate.add(Duration(days: 6));
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    double netIncome = widget.income - widget.expense; // Calculate net income
-
     return Scaffold(
       appBar: AppBar(
         title: Text("Chart"),
@@ -47,6 +70,7 @@ class _ChartScreenState extends State<ChartScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _buildPeriodButton("Monthly"),
+                _buildPeriodButton("Weekly"),
               ],
             ),
           ),
@@ -60,53 +84,78 @@ class _ChartScreenState extends State<ChartScreen> {
             ),
           ),
 
-          // Donut Charts (Income and Expense)
+          // StreamBuilder for Donut Charts
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildDonutChart("Income", widget.income, Colors.green),
-                  ),
-                  Expanded(
-                    child: _buildDonutChart("Expense", widget.expense, Colors.red),
-                  ),
-                ],
-              ),
-            ),
-          ),
+            child: StreamBuilder<Map<String, double>>(
+              stream: _fetchChartData(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
 
-          // Net Income Display
-          Padding(
-            padding: const EdgeInsets.all(10.0),
-            child: Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(15.0),
-                child: Column(
+                if (!snapshot.hasData) {
+                  return Center(child: Text("No data available."));
+                }
+
+                final chartData = snapshot.data!;
+                final income = chartData['income']!;
+                final expense = chartData['expense']!;
+                final netIncome = income - expense;
+
+                return Column(
                   children: [
-                    Text(
-                      "Net Income",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    // Donut Charts
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildDonutChart("Income", income, Colors.green),
+                            ),
+                            Expanded(
+                              child: _buildDonutChart("Expense", expense, Colors.red),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    Text(
-                      "IDR ${netIncome.toStringAsFixed(0)}",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: netIncome >= 0 ? Colors.blue : Colors.red,
+
+                    // Net Income Display
+                    Padding(
+                      padding: const EdgeInsets.all(10.0),
+                      child: Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 3,
+                        child: Padding(
+                          padding: const EdgeInsets.all(15.0),
+                          child: Column(
+                            children: [
+                              Text(
+                                "Net Income",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                "IDR ${netIncome.toStringAsFixed(0)}",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: netIncome >= 0 ? Colors.blue : Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -114,7 +163,6 @@ class _ChartScreenState extends State<ChartScreen> {
     );
   }
 
-  // Build Period Selector Buttons
   Widget _buildPeriodButton(String period) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 5.0),
@@ -134,7 +182,6 @@ class _ChartScreenState extends State<ChartScreen> {
     );
   }
 
-  // Build Donut Chart Widget
   Widget _buildDonutChart(String title, double value, Color color) {
     return Column(
       children: [
@@ -171,7 +218,6 @@ class _ChartScreenState extends State<ChartScreen> {
     );
   }
 
-  // Get Month Name from Month Number
   String _monthName(int month) {
     const months = [
       "Jan", "Feb", "Mar", "Apr", "May", "Jun",

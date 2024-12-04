@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import '../models/transaction.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as firestore; // Prefix Firestore import
+import '../models/transaction.dart' as model; // Prefix the custom Transaction model
 
 class TransactionForm extends StatefulWidget {
-  final Function(String, double, bool) addTransaction;
-  final Transaction? transactionToEdit; // Optional transaction to edit
-  final Function(String, String, double, bool)? onEditTransaction;
+  final model.Transaction? transactionToEdit; // Use the custom Transaction model
+  final Function()? onTransactionUpdated; // Callback to refresh the parent state
 
-  TransactionForm(
-    this.addTransaction, {
+  TransactionForm({
     this.transactionToEdit,
-    this.onEditTransaction,
+    this.onTransactionUpdated,
   });
 
   @override
@@ -25,6 +24,7 @@ class _TransactionFormState extends State<TransactionForm> {
   void initState() {
     super.initState();
 
+    // Pre-fill the form if editing an existing transaction
     if (widget.transactionToEdit != null) {
       _titleController.text = widget.transactionToEdit!.title;
       _amountController.text = widget.transactionToEdit!.amount.toString();
@@ -32,26 +32,52 @@ class _TransactionFormState extends State<TransactionForm> {
     }
   }
 
-  void _submitData() {
-    final enteredTitle = _titleController.text;
+  // Submit transaction data to Firestore
+  void _submitData() async {
+    final enteredTitle = _titleController.text.trim();
     final enteredAmount = double.tryParse(_amountController.text) ?? 0;
 
     if (enteredTitle.isEmpty || enteredAmount <= 0) {
+      // Show error if input is invalid
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter valid title and amount')),
+      );
       return;
     }
 
-    if (widget.transactionToEdit != null) {
-      widget.onEditTransaction!(
-        widget.transactionToEdit!.id,
-        enteredTitle,
-        enteredAmount,
-        _isIncome,
-      );
-    } else {
-      widget.addTransaction(enteredTitle, enteredAmount, _isIncome);
-    }
+    try {
+      final transactionsCollection = firestore.FirebaseFirestore.instance.collection('transactions');
 
-    Navigator.of(context).pop(); // Close the modal
+      if (widget.transactionToEdit != null) {
+        // Update existing transaction
+        await transactionsCollection.doc(widget.transactionToEdit!.id).update({
+          'title': enteredTitle,
+          'amount': enteredAmount,
+          'isIncome': _isIncome,
+          'date': DateTime.now(),
+        });
+      } else {
+        // Add new transaction
+        await transactionsCollection.add({
+          'title': enteredTitle,
+          'amount': enteredAmount,
+          'isIncome': _isIncome,
+          'date': DateTime.now(),
+        });
+      }
+
+      // Notify parent to refresh the state
+      if (widget.onTransactionUpdated != null) {
+        widget.onTransactionUpdated!();
+      }
+
+      // Close the modal
+      Navigator.of(context).pop();
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save transaction: $error')),
+      );
+    }
   }
 
   @override
