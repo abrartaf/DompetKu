@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' as firestore; // Prefix Firestore import
-import '../models/transaction.dart' as model; // Prefix the custom Transaction model
+import 'package:cloud_firestore/cloud_firestore.dart'
+    as firestore; // Prefix Firestore import
+import '../models/transaction.dart'
+    as model; // Prefix the custom Transaction model
 
 class TransactionForm extends StatefulWidget {
-  final model.Transaction? transactionToEdit; // Use the custom Transaction model
-  final Function()? onTransactionUpdated; // Callback to refresh the parent state
+  final model.Transaction?
+      transactionToEdit; // Use the custom Transaction model
+  final Function()?
+      onTransactionUpdated; // Callback to refresh the parent state
 
   TransactionForm({
     this.transactionToEdit,
@@ -46,7 +50,8 @@ class _TransactionFormState extends State<TransactionForm> {
     }
 
     try {
-      final transactionsCollection = firestore.FirebaseFirestore.instance.collection('transactions');
+      final transactionsCollection =
+          firestore.FirebaseFirestore.instance.collection('transactions');
 
       if (widget.transactionToEdit != null) {
         // Update existing transaction
@@ -107,12 +112,15 @@ class _TransactionFormState extends State<TransactionForm> {
                   isSelected: [_isIncome, !_isIncome],
                   onPressed: (index) {
                     setState(() {
-                      _isIncome = index == 0; // Index 0 -> Income, Index 1 -> Expense
+                      _isIncome =
+                          index == 0; // Index 0 -> Income, Index 1 -> Expense
                     });
                   },
                   borderRadius: BorderRadius.circular(10),
                   selectedColor: Colors.white,
-                  fillColor: Colors.blue,
+                  fillColor: _isIncome
+                      ? Colors.green
+                      : Colors.red, // Dynamically set color
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),

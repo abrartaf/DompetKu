@@ -9,8 +9,8 @@ class ChartScreen extends StatefulWidget {
 
 class _ChartScreenState extends State<ChartScreen> {
   String _selectedPeriod = "Monthly"; // Default period
-  DateTime _startDate = DateTime(2024, 11, 1);
-  DateTime _endDate = DateTime(2024, 11, 30);
+  DateTime _startDate = DateTime(2024, 12, 1);
+  DateTime _endDate = DateTime(2024, 12, 30);
 
   // Fetch income and expense data from Firestore
   Stream<Map<String, double>> _fetchChartData() {
@@ -141,7 +141,7 @@ class _ChartScreenState extends State<ChartScreen> {
                                 ),
                               ),
                               Text(
-                                "IDR ${netIncome.toStringAsFixed(0)}",
+                                "Rp ${netIncome.toStringAsFixed(0)}",
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -211,7 +211,7 @@ class _ChartScreenState extends State<ChartScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         Text(
-          "IDR ${value.toStringAsFixed(0)}",
+          "Rp ${value.toStringAsFixed(0)}",
           style: TextStyle(fontSize: 14, color: color),
         ),
       ],
